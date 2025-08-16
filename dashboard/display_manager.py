@@ -39,6 +39,14 @@ class DisplayManager:
             self.log_messages = self.log_messages[:100]
         logging.info(message)
 
+    def update_pair_data(self, pair_symbol, strategy_dfs):
+        if not strategy_dfs or Config.DISPLAY_STRATEGY not in strategy_dfs:
+            return
+        processed_data = strategy_dfs[Config.DISPLAY_STRATEGY]
+        if processed_data is not None and not processed_data.empty:
+            self.pair_data[pair_symbol] = processed_data
+            self.last_update = datetime.now()
+
     def create_dashboard_layout(self):
         # This is the full layout from the original script, adapted for modularity
         return html.Div([

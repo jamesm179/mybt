@@ -27,7 +27,7 @@ class BinanceAPI(BaseExchangeAPI):
             for col in df.columns:
                 if col != 'open_time':
                     df[col] = pd.to_numeric(df[col], errors='coerce')
-            df['open_time'] = pd.to_datetime(df['open_time'], unit='ms')
+            df['open_time'] = pd.to_datetime(pd.to_numeric(df['open_time']), unit='ms')
             return df.sort_values('open_time').reset_index(drop=True)
         except Exception as e:
             logging.error(f"Binance Futures API Error for {pair}: {e}")
