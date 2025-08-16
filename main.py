@@ -6,7 +6,11 @@ import pkg_resources
 def check_dependencies():
     """Checks if all required packages are installed."""
     try:
-        with open('requirements.txt') as f:
+        # Construct path to requirements.txt relative to this script's location
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        req_path = os.path.join(script_dir, 'requirements.txt')
+
+        with open(req_path) as f:
             requirements = f.read().splitlines()
 
         # Filter out comments and platform-specific markers for checking
