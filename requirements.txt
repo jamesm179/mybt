@@ -1,0 +1,19 @@
+pandas
+numpy
+pytz
+requests
+# TA-Lib is a dependency for the talib library.
+# On Windows, you may need to install the C++ build tools.
+# On Linux, you may need to run: sudo apt-get install libta-lib-dev
+# See https://github.com/mrjbq7/ta-lib for full instructions.
+TA-Lib
+dash
+dash-bootstrap-components
+Flask
+python-telegram-bot
+pyttsx3
+# The pywin32 library is only required for Windows sound notifications.
+pywin32; sys_platform == 'win32'
+aiohttp
+aiofiles
+binance-connector
