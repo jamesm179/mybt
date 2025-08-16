@@ -4,34 +4,51 @@ import logging
 import pkg_resources
 
 def check_dependencies():
-    """Checks if all required packages are installed."""
+    """
+    Checks if all required packages from requirements.txt are installed.
+    Provides a clear error and exits if dependencies are missing.
+    """
+    # Use a basic logger until the full logging is configured
+    print("--- Checking Dependencies ---")
     try:
-        # Construct path to requirements.txt relative to this script's location
         script_dir = os.path.dirname(os.path.abspath(__file__))
         req_path = os.path.join(script_dir, 'requirements.txt')
+
+        if not os.path.exists(req_path):
+            print(f"--> FATAL ERROR: `requirements.txt` not found at the expected path: {req_path}")
+            print("--> Please ensure `requirements.txt` is in the same directory as `main.py`.")
+            sys.exit(1)
 
         with open(req_path) as f:
             requirements = f.read().splitlines()
 
-        # Filter out comments and platform-specific markers for checking
-        parsed_reqs = []
+        missing_packages = []
         for req in requirements:
             if req.strip() and not req.strip().startswith('#'):
-                # Basic parsing for pkg_resources, won't handle all VCS/URL cases
-                req_name = req.split(';')[0].split('==')[0].split('>')[0].split('<')[0].strip()
-                if req_name:
-                    parsed_reqs.append(req_name)
+                try:
+                    # Clean up requirement string for pkg_resources
+                    req_name = req.split(';')[0].split('==')[0].split('>')[0].split('<')[0].strip()
+                    if req_name:
+                        pkg_resources.require(req_name)
+                except pkg_resources.DistributionNotFound:
+                    missing_packages.append(req)
 
-        pkg_resources.require(parsed_reqs)
-        logging.info("All dependencies are satisfied.")
-    except FileNotFoundError:
-        logging.error("`requirements.txt` not found. Cannot check dependencies.")
-        # Allow to continue but with a strong warning
+        if missing_packages:
+            print("--> FATAL ERROR: The following required packages are not installed:")
+            for pkg in missing_packages:
+                print(f"    - {pkg}")
+            print("\n--> Please install all required packages by running this command:")
+            print("    pip install -r requirements.txt")
+            sys.exit(1)
+
+        print("--> All dependencies are satisfied.")
+
+    except ImportError:
+        print("--> FATAL ERROR: `pkg_resources` (part of `setuptools`) is not installed.")
+        print("--> Please install it by running: pip install setuptools")
+        sys.exit(1)
     except Exception as e:
-        logging.error(f"Dependency check failed: {e}")
-        print(f"--> An error occurred during dependency check: {e}")
-        print("--> Please ensure all required packages are installed by running:")
-        print("--> pip install -r requirements.txt")
+        print(f"--> An unexpected error occurred during dependency check: {e}")
         sys.exit(1)
 
 # Run dependency check before any other imports from our modules
