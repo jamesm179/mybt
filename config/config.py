@@ -40,9 +40,9 @@ class Config:
     OVERRIDE_STOP_LOSS = 5.0
 
     # Exchange & API
-    SELECTED_EXCHANGE = 'coindcx'
+    SELECTED_EXCHANGE = 'binance'
     SUPPORTED_EXCHANGES = ['coindcx', 'binance', 'bitget']
-    ACTIVE_EXCHANGES = ['coindcx']
+    ACTIVE_EXCHANGES = ['binance', 'bitget']
     EXCHANGE_CREDENTIALS = {}
 
     # Trailing Stop

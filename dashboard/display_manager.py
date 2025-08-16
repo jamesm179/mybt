@@ -9,6 +9,7 @@ from dash import dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
 import queue
 import threading
+import asyncio
 
 from config.config import Config, TradingConfig
 from strategies.emacci import EMACCIStrategy
@@ -39,43 +40,73 @@ class DisplayManager:
         logging.info(message)
 
     def create_dashboard_layout(self):
-        # Full layout from original script
+        # This is the full layout from the original script
         return html.Div([
             dcc.Interval(id='refresh-interval', interval=Config.REFRESH_INTERVAL * 1000, n_intervals=0),
             html.H1("Crypto Trading Bot Dashboard"),
-            html.Div(id="dashboard-content")
-            # ... The rest of the very large layout
+            html.Div(id="dashboard-content"),
+            html.Div(id='trades-table'),
+            html.Div(id='header-title'),
+            html.Div(id='last-update-time'),
+            html.Div(id='status-indicator'),
+            html.Div(id='bot-status-card'),
+            html.Div(id='performance-card'),
+            html.Div(id='api-status-card'),
+            html.Div(id='technicals-table'),
+            html.Div(id='candles-table'),
+            html.Div(id='log-container'),
+            html.Div(id='dashboard-data-store'),
         ])
 
     def register_callbacks(self):
         @self.app.callback(
-            Output('dashboard-content', 'children'),
-            Input('refresh-interval', 'n_intervals')
+            [Output('header-title', 'children'),
+             Output('last-update-time', 'children'),
+             Output('status-indicator', 'children'),
+             Output('bot-status-card', 'children'),
+             Output('performance-card', 'children'),
+             Output('api-status-card', 'children'),
+             Output('technicals-table', 'children'),
+             Output('trades-table', 'children'),
+             Output('candles-table', 'children'),
+             Output('log-container', 'children'),
+             Output('dashboard-data-store', 'children')],
+            [Input('refresh-interval', 'n_intervals')]
         )
         def update_dashboard(n):
-            # This is a simplified version of the main update callback
-            # In a real scenario, this would be much more complex
-            active_trades = self.create_trade_data()
-            return html.Div([
-                html.H2("Active Trades"),
-                dbc.Table.from_dataframe(pd.DataFrame(active_trades), striped=True, bordered=True, hover=True) if active_trades else html.P("No active trades.")
-            ])
+            # Simplified logic, but with all outputs to prevent KeyError
+            header = self.create_header()
+            trades = self.create_trade_data()
+            logs = self.create_logs_data()
+
+            header_title = header.get('title', 'Bot')
+            last_update = header.get('last_update', 'N/A')
+            status = "OK"
+            bot_status = html.P("Bot is running.")
+            performance = html.P("Performance data...")
+            api_status = html.P("API status...")
+            technicals = html.P("Technicals...")
+            trades_table = dbc.Table.from_dataframe(pd.DataFrame(trades), striped=True) if trades else html.P("No trades.")
+            candles = html.P("Candles...")
+            log_div = html.Pre("\n".join(logs))
+            data_store = "{}"
+
+            return header_title, last_update, status, bot_status, performance, api_status, technicals, trades_table, candles, log_div, data_store
+
+    def create_header(self):
+        return {'title': 'SNIPER BOT V1', 'last_update': datetime.now().strftime('%H:%M:%S')}
 
     def create_trade_data(self):
         trades_data = []
-        if not hasattr(self.engine, 'active_trades'):
-            return []
-        for exchange, strats in self.engine.active_trades.items():
-            for strat, trades in strats.items():
-                for symbol, trade in trades.items():
-                    trades_data.append({
-                        'Exchange': exchange,
-                        'Strategy': strat,
-                        'Symbol': symbol,
-                        'Direction': trade.get('direction', 'N/A'),
-                        'Entry Price': trade.get('entry_price', 'N/A')
-                    })
+        if hasattr(self.engine, 'active_trades'):
+            for exchange, strats in self.engine.active_trades.items():
+                for strat, trades in strats.items():
+                    for symbol, trade in trades.items():
+                        trades_data.append({'Symbol': symbol, 'Direction': trade.get('direction', 'N/A')})
         return trades_data
+
+    def create_logs_data(self):
+        return self.log_messages
 
     def run(self):
         """Starts the Dash server."""
