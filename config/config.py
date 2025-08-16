@@ -80,8 +80,8 @@ class Config:
 class TradingConfig:
     """Contains trading-specific parameters."""
     DEFAULT_PAIRS = [
-        "B-BTC_USDT", "B-ETH_USDT", "B-XRP_USDT", "B-LTC_USDT",
-        "B-ADA_USDT", "B-SOL_USDT", "B-DOGE_USDT"
+        "BTCUSDT", "ETHUSDT", "XRPUSDT", "LTCUSDT",
+        "ADAUSDT", "SOLUSDT", "DOGEUSDT"
     ]
     LEVERAGE = 10
     MAX_RISK_USDT = 100

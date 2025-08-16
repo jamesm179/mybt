@@ -20,8 +20,12 @@ class BaseExchangeAPI:
         return [{'currency_short_name': 'USDT', 'balance': '1000.0'}]
 
     def _format_pair(self, pair, separator=''):
-        """Removes the 'B-' prefix and joins with a separator."""
-        return pair.replace('B-', '').replace('_', separator)
+        """Joins the pair with a separator if needed."""
+        # This base implementation assumes the pair is already in the correct format
+        # or can be simply joined. Specific exchanges can override this.
+        if '_' in pair:
+            return pair.replace('_', separator)
+        return pair
 
     def _format_dataframe(self, df, column_map):
         """Formats a DataFrame to the bot's standard column names and types."""

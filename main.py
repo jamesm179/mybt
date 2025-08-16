@@ -11,6 +11,7 @@ from config.config import Config, TradingConfig
 from core.database import DatabaseManager
 from core.health_monitor import HealthMonitor, ConnectivityMonitor
 from core.trading_engine import TradingEngine
+from core.trailing_stop_manager import TrailingStopManager
 from dashboard.display_manager import DisplayManager
 from exchanges.factory import ExchangeAPIFactory
 from utils import load_credentials
@@ -23,6 +24,7 @@ class CryptoBot:
         Config.EXCHANGE_CREDENTIALS = load_credentials()
 
         self.health_monitor = HealthMonitor()
+        self.trailing_stop_manager = TrailingStopManager()
         self.connectivity_monitor = ConnectivityMonitor()
         self.display = DisplayManager(None, None, None)
         self.db_manager = DatabaseManager(Config.DB_PATH, self.display)
@@ -52,15 +54,14 @@ class CryptoBot:
         self.initialization_stats = {}
 
     def update_trading_pairs(self):
-        """Update the trading pairs list with manual pairs from config."""
-        logging.info(f"Updating trading pairs. Manual pairs: {Config.MANUAL_TRADING_PAIRS}")
+        """Update the trading pairs list with manual pairs from config for futures."""
+        logging.info(f"Updating trading pairs for futures. Manual pairs: {Config.MANUAL_TRADING_PAIRS}")
 
         all_pairs = set(TradingConfig.DEFAULT_PAIRS)
         for manual_pair in Config.MANUAL_TRADING_PAIRS:
-            if '/' in manual_pair:
-                symbol, quote = manual_pair.split('/')
-                api_pair = f"B-{symbol}_{quote}"
-                all_pairs.add(api_pair)
+            # Convert display format like "GALA/USDT" to API format "GALAUSDT"
+            api_pair = manual_pair.replace('/', '').upper()
+            all_pairs.add(api_pair)
 
         self.pairs = [{"symbol": pair, "color": "white", "weight": i} for i, pair in enumerate(sorted(list(all_pairs)))]
         self.engine.pairs = self.pairs # Update engine's pair list

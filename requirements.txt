@@ -16,4 +16,4 @@ pyttsx3
 pywin32; sys_platform == 'win32'
 aiohttp
 aiofiles
-binance-connector
+binance-futures-connector

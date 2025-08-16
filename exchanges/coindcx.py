@@ -10,6 +10,7 @@ class CoinDCXAPI(BaseExchangeAPI):
         self.public_url = "https://public.coindcx.com"
 
     def get_historical_data(self, pair, interval, limit=200, force_fresh=False):
+        logging.warning("The CoinDCX API client currently only supports SPOT market data, not FUTURES.")
         # CoinDCX pair format is 'BTCUSDT', but the API endpoint uses 'B-BTC_USDT' for some pairs
         # The public candles endpoint uses the format 'BTC_USDT'
         formatted_pair = self._format_pair(pair, '_')
