@@ -40,23 +40,46 @@ class DisplayManager:
         logging.info(message)
 
     def create_dashboard_layout(self):
-        # This is the full layout from the original script
+        # This is the full layout from the original script, adapted for modularity
         return html.Div([
+            dcc.Store(id='theme-store', data=Config.CURRENT_THEME),
             dcc.Interval(id='refresh-interval', interval=Config.REFRESH_INTERVAL * 1000, n_intervals=0),
-            html.H1("Crypto Trading Bot Dashboard"),
-            html.Div(id="dashboard-content"),
-            html.Div(id='trades-table'),
-            html.Div(id='header-title'),
-            html.Div(id='last-update-time'),
-            html.Div(id='status-indicator'),
-            html.Div(id='bot-status-card'),
-            html.Div(id='performance-card'),
-            html.Div(id='api-status-card'),
-            html.Div(id='technicals-table'),
-            html.Div(id='candles-table'),
-            html.Div(id='log-container'),
-            html.Div(id='dashboard-data-store'),
-        ])
+
+            dbc.Offcanvas(id="settings-offcanvas", title="Settings", is_open=False, placement="end"),
+            dbc.Modal(id="kill-switch-modal", is_open=False),
+
+            html.Div([
+                html.H1(id='header-title', children="SNIPER BOT V1"),
+                html.Div([
+                    html.Span("Last Update: ", className="text-muted"),
+                    html.Span(id='last-update-time'),
+                    html.Span(" | Status: "),
+                    html.Span(id='status-indicator'),
+                    dbc.Button(html.I(className="fas fa-cog"), id="open-settings-button", color="secondary", className="ms-3")
+                ], className="d-flex align-items-center")
+            ], className="p-3 bg-dark text-white border-bottom"),
+
+            dcc.Tabs(id="dashboard-tabs", value="tab-dashboard", children=[
+                dcc.Tab(label="Dashboard", value="tab-dashboard", children=[
+                    dbc.Row([
+                        dbc.Col(dbc.Card([dbc.CardHeader("Bot Status"), dbc.CardBody(id='bot-status-card')]), width=4),
+                        dbc.Col(dbc.Card([dbc.CardHeader("Performance"), dbc.CardBody(id='performance-card')]), width=4),
+                        dbc.Col(dbc.Card([dbc.CardHeader("API Status"), dbc.CardBody(id='api-status-card')]), width=4),
+                    ]),
+                    html.H3("Technical Indicators"),
+                    html.Div(id='technicals-table'),
+                    html.H3("Active Positions"),
+                    html.Div(id='trades-table'),
+                    html.H3("Recent Candles"),
+                    html.Div(id='candles-table'),
+                    html.H3("Log Messages"),
+                    html.Pre(id='log-container')
+                ]),
+                dcc.Tab(label="Multi-Timeframe Analysis", value="tab-multi-timeframe"),
+                dcc.Tab(label="Trade History", value="tab-trade-history"),
+            ]),
+            html.Div(id='dashboard-data-store', style={'display': 'none'}),
+        ], className="container-fluid")
 
     def register_callbacks(self):
         @self.app.callback(
@@ -74,7 +97,7 @@ class DisplayManager:
             [Input('refresh-interval', 'n_intervals')]
         )
         def update_dashboard(n):
-            # Simplified logic, but with all outputs to prevent KeyError
+            # This is a simplified version of the main update callback
             header = self.create_header()
             trades = self.create_trade_data()
             logs = self.create_logs_data()

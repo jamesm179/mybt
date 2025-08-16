@@ -1,8 +1,40 @@
 import os
-import asyncio
-import signal
 import sys
 import logging
+import pkg_resources
+
+def check_dependencies():
+    """Checks if all required packages are installed."""
+    try:
+        with open('requirements.txt') as f:
+            requirements = f.read().splitlines()
+
+        # Filter out comments and platform-specific markers for checking
+        parsed_reqs = []
+        for req in requirements:
+            if req.strip() and not req.strip().startswith('#'):
+                # Basic parsing for pkg_resources, won't handle all VCS/URL cases
+                req_name = req.split(';')[0].split('==')[0].split('>')[0].split('<')[0].strip()
+                if req_name:
+                    parsed_reqs.append(req_name)
+
+        pkg_resources.require(parsed_reqs)
+        logging.info("All dependencies are satisfied.")
+    except FileNotFoundError:
+        logging.error("`requirements.txt` not found. Cannot check dependencies.")
+        # Allow to continue but with a strong warning
+    except Exception as e:
+        logging.error(f"Dependency check failed: {e}")
+        print(f"--> An error occurred during dependency check: {e}")
+        print("--> Please ensure all required packages are installed by running:")
+        print("--> pip install -r requirements.txt")
+        sys.exit(1)
+
+# Run dependency check before any other imports from our modules
+check_dependencies()
+
+import asyncio
+import signal
 import time
 import threading
 import json

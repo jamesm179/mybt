@@ -97,16 +97,163 @@ class TradingEngine:
         return signals
 
     async def execute_trades(self, signals):
-        # ... (full implementation from original script) ...
-        pass
+        try:
+            exchange_name = signals['exchange']
+            pair = signals['pair']
+            symbol = signals['symbol']
+            price = signals['price']
+            time_ist = signals.get('time_ist', datetime.now().strftime('%Y%m%d_%H%M%S'))
+            trigger_strategy = signals.get('trigger_strategy', 'unknown')
+
+            # Process exits first
+            if signals.get('should_exit'):
+                if symbol in self.active_trades[exchange_name].get(trigger_strategy, {}):
+                    trade = self.active_trades[exchange_name][trigger_strategy][symbol]
+                    profit_pct = ((price - trade['entry_price']) / trade['entry_price']) * 100 * trade['leverage'] if trade['direction'] == 'long' else ((trade['entry_price'] - price) / trade['entry_price']) * 100 * trade['leverage']
+                    amount = trade['amount']
+                    self.balance += amount * (1 + profit_pct / 100)
+                    self.log_trade(exchange_name, "SELL" if trade['direction'] == 'long' else "BUY", pair, price, amount, self.balance, profit_pct, signals.get('exit_reason', 'Exit Signal'), trade['direction'], trade['stop_loss_price'], trade['take_profit_price'], trade['trade_id'], "Closed (Signal)")
+                    del self.active_trades[exchange_name][trigger_strategy][symbol]
+                    return True
+
+            # Process entries
+            if (signals.get('should_buy') or signals.get('should_sell')) and Config.AUTO_TRADING and not self.emergency_kill_switch.trading_disabled:
+                if any(symbol in trades for strategy_trades in self.active_trades[exchange_name].values() for symbol in strategy_trades):
+                    return False
+
+                risk_amount = min(TradingConfig.MAX_RISK_USDT, self.balance * TradingConfig.RISK_PERCENT, self.balance)
+                if risk_amount < TradingConfig.MIN_ORDER_SIZE: return False
+
+                strategy_config = Config.STRATEGIES.get(trigger_strategy, {})
+                desired_tp = strategy_config.get('desired_take_profit', 7.0)
+                desired_sl = strategy_config.get('desired_stop_loss', 5.0)
+                take_profit, stop_loss = TradingConfig.calculate_tp_sl(desired_tp, desired_sl, TradingConfig.LEVERAGE, trigger_strategy)
+                if take_profit is None or stop_loss is None: return False
+
+                direction = "long" if signals.get('should_buy') else "short"
+                action = "BUY" if direction == "long" else "SELL"
+                stop_loss_price = price * (1 - stop_loss) if direction == "long" else price * (1 + stop_loss)
+                take_profit_price = price * (1 + take_profit) if direction == "long" else price * (1 - take_profit)
+
+                trade_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{pair}_{direction}"
+                self.balance -= risk_amount
+                self.active_trades[exchange_name][trigger_strategy][symbol] = {
+                    'entry_price': price, 'entry_time': time_ist, 'highest_price': price,
+                    'leverage': TradingConfig.LEVERAGE, 'amount': risk_amount,
+                    'stop_loss_price': stop_loss_price, 'take_profit_price': take_profit_price,
+                    'trade_id': trade_id, 'direction': direction, 'bars_since_entry': 0
+                }
+                self.log_trade(exchange_name, action, pair, price, risk_amount, self.balance, None, signals.get('entry_reason', 'Signal'), direction, stop_loss_price, take_profit_price, trade_id, "Active")
+                await self.telegram.send_signal(pair, action, price, risk_amount, self.balance, signals.get('entry_reason', 'Signal'), direction, stop_loss_price, take_profit_price)
+                self.signals_today += 1
+                return True
+
+            return False
+        except Exception as e:
+            logging.error(f"Trade execution error for {signals.get('pair', 'UNKNOWN')}: {e}", exc_info=True)
+            return False
 
     async def execute_manual_trade(self, pair_symbol, action):
-        # ... (full implementation from original script) ...
-        pass
+        """Execute a manual trade for a specific pair."""
+        try:
+            # Find the pair info
+            pair_info = next((p for p in self.pairs if p['symbol'] == pair_symbol), None)
+            if not pair_info:
+                self.display.add_log(f"Invalid pair symbol for manual trade: {pair_symbol}")
+                return False
+
+            if pair_symbol not in self.display.pair_data or self.display.pair_data[pair_symbol].empty:
+                self.display.add_log(f"No data available for {pair_symbol}")
+                return False
+
+            df = self.display.pair_data[pair_symbol]
+            latest_row = df.iloc[-1]
+            price = latest_row['close']
+            pair = latest_row['pair']
+            time_ist = latest_row['time_ist']
+
+            # Use the first active strategy and selected exchange for manual trades
+            trigger_strategy = Config.ACTIVE_STRATEGIES[0]
+            exchange_name = Config.SELECTED_EXCHANGE
+
+            if any(pair_symbol in trades for trades in self.active_trades[exchange_name].values()):
+                self.display.add_log(f"Already have an active trade for {pair}")
+                return False
+
+            risk_amount = min(TradingConfig.MAX_RISK_USDT, self.balance * TradingConfig.RISK_PERCENT, self.balance)
+            if risk_amount < TradingConfig.MIN_ORDER_SIZE:
+                self.display.add_log(f"Insufficient balance for manual trade: {self.balance}")
+                return False
+
+            strategy_config = Config.STRATEGIES.get(trigger_strategy, {})
+            desired_tp = strategy_config.get('desired_take_profit', 7.0)
+            desired_sl = strategy_config.get('desired_stop_loss', 5.0)
+            take_profit, stop_loss = TradingConfig.calculate_tp_sl(desired_tp, desired_sl, TradingConfig.LEVERAGE, trigger_strategy)
+
+            direction = "long" if action == "BUY" else "short"
+            stop_loss_price = price * (1 - stop_loss) if direction == "long" else price * (1 + stop_loss)
+            take_profit_price = price * (1 + take_profit) if direction == "long" else price * (1 - take_profit)
+
+            trade_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{pair}_{direction}_manual"
+            self.balance -= risk_amount
+            self.active_trades[exchange_name][trigger_strategy][pair_symbol] = {
+                'entry_price': price, 'entry_time': time_ist, 'highest_price': price,
+                'leverage': TradingConfig.LEVERAGE, 'amount': risk_amount,
+                'stop_loss_price': stop_loss_price, 'take_profit_price': take_profit_price,
+                'trade_id': trade_id, 'direction': direction, 'bars_since_entry': 0
+            }
+
+            reason = f"Manual {direction.upper()} trade"
+            self.log_trade(exchange_name, action, pair, price, risk_amount, self.balance, None, reason, direction, stop_loss_price, take_profit_price, trade_id, "Active")
+            await self.telegram.send_signal(pair, action, price, risk_amount, self.balance, reason, direction, stop_loss_price, take_profit_price)
+            self.signals_today += 1
+            self.display.add_log(f"Manual {action} executed for {pair} at {price}")
+            return True
+        except Exception as e:
+            self.display.add_log(f"Manual trade execution error for {pair_symbol}: {e}")
+            return False
 
     async def exit_position(self, pair_symbol, strategy_name=None):
-        # ... (full implementation from original script) ...
-        pass
+        """Manually exit a position for a specific pair."""
+        try:
+            exchange_name = Config.SELECTED_EXCHANGE
+            found_strategy = None
+            if strategy_name and strategy_name in self.active_trades[exchange_name] and pair_symbol in self.active_trades[exchange_name][strategy_name]:
+                found_strategy = strategy_name
+            else:
+                for strat_name in self.active_trades[exchange_name]:
+                    if pair_symbol in self.active_trades[exchange_name][strat_name]:
+                        found_strategy = strat_name
+                        break
+
+            if not found_strategy:
+                self.display.add_log(f"No active position found for {pair_symbol} on {exchange_name}")
+                return False
+
+            if pair_symbol not in self.display.pair_data or self.display.pair_data[pair_symbol].empty:
+                self.display.add_log(f"No price data for {pair_symbol} to exit position.")
+                return False
+
+            current_price = self.display.pair_data[pair_symbol].iloc[-1]['close']
+            trade = self.active_trades[exchange_name][found_strategy][pair_symbol]
+            is_long = trade['direction'] == 'long'
+
+            profit_pct = ((current_price - trade['entry_price']) / trade['entry_price']) * 100 * trade['leverage'] if is_long else ((trade['entry_price'] - current_price) / trade['entry_price']) * 100 * trade['leverage']
+            amount = trade['amount']
+            self.balance += amount * (1 + profit_pct / 100)
+
+            action = "SELL" if is_long else "BUY"
+            pair_display = pair_symbol.replace('B-', '').replace('_', '/')
+
+            self.log_trade(exchange_name, action, pair_display, current_price, amount, self.balance, profit_pct, "Manual Exit", trade['direction'], trade['stop_loss_price'], trade['take_profit_price'], trade['trade_id'], "Closed (Manual)")
+            await self.telegram.send_signal(pair_display, action, current_price, amount, self.balance, f"Manual Exit | P/L: {profit_pct:.2f}%", trade['direction'], trade['stop_loss_price'], trade['take_profit_price'], profit_pct)
+
+            del self.active_trades[exchange_name][found_strategy][pair_symbol]
+            self.display.add_log(f"Manually exited {trade['direction']} position for {pair_display} with P/L: {profit_pct:.2f}%")
+            return True
+        except Exception as e:
+            self.display.add_log(f"Error exiting position for {pair_symbol}: {e}")
+            return False
 
     def log_trade(self, exchange, action, pair, price, amount, balance, profit_pct, reason, direction, stop_loss_price=None, take_profit_price=None, trade_id=None, status="Active"):
         asyncio.create_task(self._ensure_async_logger_started())
